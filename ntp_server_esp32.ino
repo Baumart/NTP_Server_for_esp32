@@ -42,11 +42,10 @@ IPAddress secondaryDNS(10, 0, 0, 1);
 
 void sendNTPResponse(AsyncUDPPacket& packet) {
   getEpochTime();
-  uint32_t ntpTime = htonl(unixTime + 2208988800UL);  // Convert Unix time to NTP time
-
-  if (DEV_MODE) Serial.print("Response Flags: 0x");
-  if (DEV_MODE) Serial.println(ntpPacket[0], HEX);
-
+  uint32_t ntpTime = htonl(unixTime + 2208988800UL);  // Unix to NTP time
+  if (4 == (packet.data()[0] >> 3 & 0b111)) {
+    ntpPacket[0] = (4 << 3) | 0b100;
+  }
   // Fill NTP packet timestamps
   memcpy(&ntpPacket[16], &ntpTime, sizeof(ntpTime));  // Reference timestamp
   memcpy(&ntpPacket[20], &frac, sizeof(frac));
@@ -93,7 +92,7 @@ void getEpochTime() {
     return;
   }
 
-  // If all fails, return 0
+  // If all fails
   if (DEV_MODE) Serial.println("⚠️ No valid time source available!");
   unixTime = 0;
 }
@@ -127,10 +126,10 @@ void setup() {
 
   // Initialize NTP response packet
   if (ntpPacket[1] != 1) {
-    ntpPacket[0] = (0b00 << 6) | (4 << 3) | 0b100; // LI = 0, Version = 4, Mode = 4 (Server)
+    ntpPacket[0] = (0b00 << 6) | (3 << 3) | 0b100; // LI = 0, Version = 4, Mode = 4 (Server)
     ntpPacket[1] = 1;   // Stratum 1 (see RFC 5905 Figure 11)
     ntpPacket[2] = 3;   // Polling interval log2/sec
-    ntpPacket[3] = -6;  // Precision (-6 ≈ milliseconds)
+    ntpPacket[3] = -28;  // Precision not testded (-28=4ns)
     memcpy(&ntpPacket[4], &rootDelay, sizeof(rootDelay));
     memcpy(&ntpPacket[8], &rootDisp, sizeof(rootDisp));
     memcpy(&ntpPacket[12], refID, 4);
@@ -150,5 +149,4 @@ void loop() {
   while (gpsSerial.available() > 0) {
     gps.encode(gpsSerial.read());
   }
-  delay(500);
 }
